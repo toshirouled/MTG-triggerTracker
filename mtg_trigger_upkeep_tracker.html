@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MTG Trigger & Upkeep Tracker</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Inter & Mana-like Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            mtg: {
+              bg: '#0B0D12',
+              card: '#161922',
+              cardBorder: '#2A2E3D',
+              accent: '#E0A96D',
+              white: '#F0E6D2',
+              blue: '#0E68AB',
+              black: '#150B00',
+              red: '#D32F2F',
+              green: '#00733E',
+              colorless: '#A6B2C0',
+              gold: '#C5A059'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            cinzel: ['Cinzel', 'serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom scrollbar for game UI */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #0B0D12; }
+    ::-webkit-scrollbar-thumb { background: #2A2E3D; border-radius: 4px; }
+    
+    /* Touch Feedback & Utilities */
+    .active-scale:active { transform: scale(0.96); }
+    .glow-gold { box-shadow: 0 0 12px rgba(197, 160, 89, 0.4); }
+    .glow-active { box-shadow: 0 0 15px rgba(224, 169, 109, 0.3); }
+    
+    /* Prevent text selection during rapid button tapping */
+    .no-select {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body class="bg-mtg-bg text-gray-100 font-sans min-h-screen flex flex-col no-select overflow-x-hidden selection:bg-mtg-accent selection:text-black">
+
+  <!-- TOP APP BAR -->
+  <header class="bg-mtg-card/90 backdrop-blur-md border-b border-mtg-cardBorder sticky top-0 z-30 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <i class="fa-solid me-1 fa-fire-flame-curved text-mtg-accent text-xl"></i>
+      <h1 class="font-cinzel text-lg font-bold tracking-wider text-mtg-white">SPELLKEEP</h1>
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <!-- Nav Tabs -->
+      <button onclick="switchTab('tracker')" id="nav-tracker" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-mtg-accent text-black transition-all">
+        <i class="fa-solid fa-play mr-1"></i> Play
+      </button>
+      <button onclick="switchTab('triggers')" id="nav-triggers" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">
+        <i class="fa-solid fa-list-check mr-1"></i> Deck
+      </button>
+      <button onclick="switchTab('counters')" id="nav-counters" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all">
+        <i class="fa-solid fa-heart mr-1"></i> Life
+      </button>
+      <button onclick="openModal('githubModal')" class="p-2 text-gray-400 hover:text-mtg-accent transition-colors">
+        <i class="fa-brands fa-github text-lg"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-2xl w-full mx-auto p-4 pb-24">
+
+    <!-- ================= TAB 1: ACTIVE GAME TRACKER ================= -->
+    <section id="tab-tracker" class="space-y-4">
+      
+      <!-- TURN & PLAYER BAR -->
+      <div class="bg-mtg-card border border-mtg-cardBorder rounded-xl p-4 flex items-center justify-between shadow-lg">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider text-mtg-accent">Current Turn</span>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span id="turn-count" class="text-2xl font-black text-white font-cinzel">Turn 1</span>
+            <span id="player-turn-badge" class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-mtg-accent/20 text-mtg-accent border border-mtg-accent/40">
+              MY TURN
+            </span>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="togglePlayerTurn()" class="active-scale px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-mtg-cardBorder rounded-lg text-xs font-medium text-gray-200 transition">
+            <i class="fa-solid fa-arrows-rotate mr-1"></i> Pass Turn
+          </button>
+          <button onclick="resetGame()" class="active-scale p-2 bg-gray-800 hover:bg-red-900/50 border border-mtg-cardBorder rounded-lg text-xs text-gray-400 hover:text-red-400 transition" title="Reset Turn Counter">
+            <i class="fa-solid fa-rotate-left"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- MAIN PHASE FLOW INDICATOR -->
+      <div class="bg-mtg-card border border-mtg-cardBorder rounded-xl p-3 shadow-lg">
+        <div class="flex items-center justify-between mb-2 px-1">
+          <span class="text-xs font-semibold uppercase text-gray-400 tracking-wider">Phase Flow</span>
+          <span id="phase-title" class="text-xs font-bold text-mtg-accent uppercase font-cinzel">Beginning Phase</span>
+        </div>
+
+        <!-- Horizontal Scrollable Phases -->
+        <div class="grid grid-cols-5 gap-1.5" id="phase-buttons">
+          <button onclick="setPhase('beginning')" id="phase-btn-beginning" class="phase-btn py-2.5 px-1 rounded-lg border text-center transition flex flex-col items-center justify-center gap-1 bg-mtg-accent text-black font-bold border-mtg-accent glow-active">
+            <i class="fa-solid fa-sun text-sm"></i>
+            <span class="text-[10px] uppercase font-bold tracking-tight">Beg</span>
+          </button>
+          <button onclick="setPhase('main1')" id="phase-btn-main1" class="phase-btn py-2.5 px-1 rounded-lg border text-center transition flex flex-col items-center justify-center gap-1 bg-gray-800/60 text-gray-400 border-mtg-cardBorder hover:border-gray-600">
+            <i class="fa-solid fa-chess-rook text-sm"></i>
+            <span class="text-[10px] uppercase font-bold tracking-tight">Main 1</span>
+          </button>
+          <button onclick="setPhase('combat')" id="phase-btn-combat" class="phase-btn py-2.5 px-1 rounded-lg border text-center transition flex flex-col items-center justify-center gap-1 bg-gray-800/60 text-gray-400 border-mtg-cardBorder hover:border-gray-600">
+            <i class="fa-solid fa-swords text-sm"></i>
+            <span class="text-[10px] uppercase font-bold tracking-tight">Combat</span>
+          </button>
+          <button onclick="setPhase('main2')" id="phase-btn-main2" class="phase-btn py-2.5 px-1 rounded-lg border text-center transition flex flex-col items-center justify-center gap-1 bg-gray-800/60 text-gray-400 border-mtg-cardBorder hover:border-gray-600">
+            <i class="fa-solid fa-castle text-sm"></i>
+            <span class="text-[10px] uppercase font-bold tracking-tight">Main 2</span>
+          </button>
+          <button onclick="setPhase('end')" id="phase-btn-end" class="phase-btn py-2.5 px-1 rounded-lg border text-center transition flex flex-col items-center justify-center gap-1 bg-gray-800/60 text-gray-400 border-mtg-cardBorder hover:border-gray-600">
+            <i class="fa-solid fa-moon text-sm"></i>
+            <span class="text-[10px] uppercase font-bold tracking-tight">End</span>
+          </button>
+        </div>
+
+        <!-- Sub-phase details (Untap, Upkeep, Draw) -->
+        <div id="subphase-container" class="mt-3 pt-2 border-t border-mtg-cardBorder flex items-center justify-around text-xs">
+          <span id="sub-untap" class="px-2 py-1 rounded bg-mtg-cardBorder/60 text-gray-300 font-medium">Untap</span>
+          <i class="fa-solid fa-angle-right text-gray-600"></i>
+          <span id="sub-upkeep" class="px-2 py-1 rounded bg-mtg-accent/20 text-mtg-accent font-bold border border-mtg-accent/30">Upkeep</span>
+          <i class="fa-solid fa-angle-right text-gray-600"></i>
+          <span id="sub-draw" class="px-2 py-1 rounded bg-mtg-cardBorder/60 text-gray-300 font-medium">Draw</span>
+        </div>
+      </div>
+
+      <!-- PHASE NAV BUTTONS -->
+      <div class="flex items-center justify-between gap-3">
+        <button onclick="prevPhase()" class="active-scale flex-1 py-3 bg-gray-800 hover:bg-gray-700 border border-mtg-cardBorder rounded-xl font-semibold text-sm text-gray-300 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-arrow-left"></i> Previous Phase
+        </button>
+        <button onclick="nextPhase()" class="active-scale flex-1 py-3 bg-mtg-accent/90 hover:bg-mtg-accent text-black font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 glow-gold">
+          Next Phase <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+
+      <!-- ACTIVE PHASE TRIGGERS CHECKLIST -->
+      <div class="bg-mtg-card border border-mtg-cardBorder rounded-xl p-4 shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-bolt text-mtg-accent"></i>
+            <h2 class="font-bold text-sm text-white tracking-wide uppercase">Active Phase Triggers</h2>
+          </div>
+          <span id="trigger-count-badge" class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full border border-mtg-cardBorder">0 Active</span>
+        </div>
+
+        <p class="text-xs text-gray-400">Triggers auto-filtered by player turn & active phase:</p>
+
+        <!-- Dynamic Trigger List -->
+        <div id="active-triggers-list" class="space-y-2 min-h-[100px]">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ================= TAB 2: CUSTOM TRIGGER MANAGER ================= -->
+    <section id="tab-triggers" class="space-y-4 hidden">
+      
+      <!-- ADD TRIGGER HEADER -->
+      <div class="bg-mtg-card border border-mtg-cardBorder rounded-xl p-4 shadow-lg flex items-center justify-between">
+        <div>
+          <h2 class="font-bold text-white text-base">Deck Trigger Library</h2>
+          <p class="text-xs text-gray-400">Manage custom card triggers & conditions</p>
+        </div>
+        <button onclick="openModal('addTriggerModal')" class="active-scale px-3 py-2 bg-mtg-accent text-black font-bold text-xs rounded-lg hover:brightness-110 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-plus"></i> Add Trigger
+        </button>
+      </div>
+
+      <!-- IMPORT / EXPORT BAR -->
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="exportTriggersJSON()" class="active-scale py-2 px-3 bg-gray-800 hover:bg-gray-700 border border-mtg-cardBorder rounded-lg text-xs font-semibold text-gray-300 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-download text-mtg-accent"></i> Export JSON
+        </button>
+        <label class="active-scale py-2 px-3 bg-gray-800 hover:bg-gray-700 border border-mtg-cardBorder rounded-lg text-xs font-semibold text-gray-300 transition flex items-center justify-center gap-2 cursor-pointer">
+          <i class="fa-solid fa-upload text-mtg-accent"></i> Import JSON
+          <input type="file" id="import-json-file" class="hidden" accept=".json" onchange="importTriggersJSON(event)" />
+        </label>
+      </div>
+
+      <!-- TRIGGER LIST CONTAINER -->
+      <div id="all-triggers-list" class="space-y-2.5">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- ================= TAB 3: LIFE & COUNTERS ================= -->
+    <section id="tab-counters" class="space-y-4 hidden">
+      
+      <!-- PLAYER LIFE CARD -->
+      <div class="bg-mtg-card border border-mtg-cardBorder rounded-2xl p-5 shadow-xl text-center relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-mtg-accent to-green-500"></div>
+        
+        <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Your Life Total</span>
+        <div class="text-6xl font-black text-white my-3 font-cinzel tracking-tight" id="life-total">40</div>
+
+        <div class="grid grid-cols-4 gap-2 max-w-xs mx-auto">
+          <button onclick="adjustLife(-5)" class="active-scale py-2 bg-red-950/60 hover:bg-red-900 border border-red-800/50 rounded-lg text-red-300 font-bold text-sm">-5</button>
+          <button onclick="adjustLife(-1)" class="active-scale py-2 bg-gray-800 hover:bg-gray-700 border border-mtg-cardBorder rounded-lg text-white font-bold text-base">-1</button>
+          <button onclick="adjustLife(1)" class="active-scale py-2 bg-gray-800 hover:bg-gray-700 border border-mtg-cardBorder rounded-lg text-white font-bold text-base">+1</button>
+          <button onclick="adjustLife(5)" class="active-scale py-2 bg-green-950/60 hover:bg-green-900 border border-green-800/50 rounded-lg text-green-300 font-bold text-sm">+5</button>
+        </div>
+      </div>
+
+      <!-- COUNTERS GRID -->
+      <div class="grid grid-cols-2 gap-3">
+        
+        <!-- POISON -->
+        <div class="bg-mtg-card border border-mtg-cardBorder rounded-xl p-3 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-xs text-green-400 font-semibold mb-2">
+            <span><i class="fa-solid fa-skull mr-1"></i> Poison</span>
+            <span id="counter-poison" class="text-lg font-bold text-white font-cinzel">0</span>
+          </div>
+          <div class="flex gap-1">
+            <button onclick="adjustCounter('poison', -1)" class="active-scale flex-1 py-1 bg-gray-800 rounded border border-mtg-cardBorder text-gray-300 text-xs font-bold">-</button>
+            <button onclick="adjustCounter('poison', 1)" class="active-scale flex-1 py-1 bg-gray-800 rounded border border-mtg-cardBorder text-gray-300 text-xs font-bold">+</button>
+          </div>
+        </div>
+
+        <!-- COMMANDER CASTS -->
+        <div class="bg-mtg-card border border-mtg-cardBorder rounded-xl p-3 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-xs text-mtg-gold font-semibold mb-2">
+            <span><i class="fa-solid fa-crown mr-1"></i> Cmdr Casts</span>
+            <span id="counter-cmdr-casts" class="text-lg font-bold text-white font-cinzel">0</span>
+          </div>
+          <div class="flex gap-1">
+            <button onclick="adjustCounter('cmdr-casts', -1)" class="active-scale flex-1 py-1 bg-gray-800 rounded border border-mtg-cardBorder text-gray-300 text-xs font-bold">-</button>
+            <button onclick="adjustCounter('cmdr-casts', 1)" class="active-scale flex-1 py-1 bg-gray-800 rounded border border-mtg-cardBorder text-gray-300 text-xs font-bold">+</button>
+          </div>
+        </div>
+
+        <!-- ENERGY -->
+        <div class="bg-mtg-card border border-mtg-cardBorder rounded-xl p-3 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-xs text-yellow-400 font-semibold mb-2">
+            <span><i class="fa-solid fa-bolt-lightning mr-1"></i> Energy</span>
+            <span id="counter-energy" class="text-lg font-bold text-white font-cinzel">0</span>
+          </div>
+          <div class="flex gap-1">
+            <button onclick="adjustCounter('energy', -1)" class="active-scale flex-1 py-1 bg-gray-800 rounded border border-mtg-cardBorder text-gray-300 text-xs font-bold">-</button>
+            <button onclick="adjustCounter('energy', 1)" class="active-scale flex-1 py-1 bg-gray-800 rounded border border-mtg-cardBorder text-gray-300 text-xs font-bold">+</button>
+          </div>
+        </div>
+
+        <!-- STORM COUNT -->
+        <div class="bg-mtg-card border border-mtg-cardBorder rounded-xl p-3 flex flex-col justify-between">
+          <div class="flex items-center justify-between text-xs text-blue-400 font-semibold mb-2">
+            <span><i class="fa-solid fa-cloud-showers-heavy mr-1"></i> Storm</span>
+            <span id="counter-storm" class="text-lg font-bold text-white font-cinzel">0</span>
+          </div>
+          <div class="flex gap-1">
+            <button onclick="adjustCounter('storm', -1)" class="active-scale flex-1 py-1 bg-gray-800 rounded border border-mtg-cardBorder text-gray-300 text-xs font-bold">-</button>
+            <button onclick="adjustCounter('storm', 1)" class="active-scale flex-1 py-1 bg-gray-800 rounded border border-mtg-cardBorder text-gray-300 text-xs font-bold">+</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- COMMANDER DAMAGE TRACKER -->
+      <div class="bg-mtg-card border border-mtg-cardBorder rounded-xl p-4 shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-red-400">Commander Damage Taken</span>
+          <button onclick="resetCounters()" class="text-xs text-gray-500 hover:text-gray-300">Reset All</button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <!-- Opponent 1 -->
+          <div class="bg-gray-900/80 p-2.5 rounded-lg border border-mtg-cardBorder text-center">
+            <span class="text-[10px] text-gray-400 block mb-1">Opponent 1</span>
+            <span id="cmdr-dmg-1" class="text-base font-bold text-white font-cinzel">0</span>
+            <div class="flex gap-1 mt-2">
+              <button onclick="adjustCmdrDmg(1, -1)" class="active-scale flex-1 bg-gray-800 rounded py-0.5 text-xs text-gray-300">-</button>
+              <button onclick="adjustCmdrDmg(1, 1)" class="active-scale flex-1 bg-gray-800 rounded py-0.5 text-xs text-gray-300">+</button>
+            </div>
+          </div>
+          <!-- Opponent 2 -->
+          <div class="bg-gray-900/80 p-2.5 rounded-lg border border-mtg-cardBorder text-center">
+            <span class="text-[10px] text-gray-400 block mb-1">Opponent 2</span>
+            <span id="cmdr-dmg-2" class="text-base font-bold text-white font-cinzel">0</span>
+            <div class="flex gap-1 mt-2">
+              <button onclick="adjustCmdrDmg(2, -1)" class="active-scale flex-1 bg-gray-800 rounded py-0.5 text-xs text-gray-300">-</button>
+              <button onclick="adjustCmdrDmg(2, 1)" class="active-scale flex-1 bg-gray-800 rounded py-0.5 text-xs text-gray-300">+</button>
+            </div>
+          </div>
+          <!-- Opponent 3 -->
+          <div class="bg-gray-900/80 p-2.5 rounded-lg border border-mtg-cardBorder text-center">
+            <span class="text-[10px] text-gray-400 block mb-1">Opponent 3</span>
+            <span id="cmdr-dmg-3" class="text-base font-bold text-white font-cinzel">0</span>
+            <div class="flex gap-1 mt-2">
+              <button onclick="adjustCmdrDmg(3, -1)" class="active-scale flex-1 bg-gray-800 rounded py-0.5 text-xs text-gray-300">-</button>
+              <button onclick="adjustCmdrDmg(3, 1)" class="active-scale flex-1 bg-gray-800 rounded py-0.5 text-xs text-gray-300">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- MODAL: ADD / EDIT TRIGGER -->
+  <div id="addTriggerModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-mtg-card border border-mtg-cardBorder w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-mtg-cardBorder pb-3">
+        <h3 class="font-bold text-white text-base font-cinzel">Add Card Trigger</h3>
+        <button onclick="closeModal('addTriggerModal')" class="text-gray-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="trigger-form" onsubmit="saveTrigger(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs text-gray-400 font-medium mb-1">Card / Trigger Name</label>
+          <input type="text" id="input-trigger-name" required placeholder="e.g. Rhystic Study, Smothering Tithe" class="w-full bg-gray-900 border border-mtg-cardBorder rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-mtg-accent" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-400 font-medium mb-1">Phase</label>
+            <select id="input-trigger-phase" class="w-full bg-gray-900 border border-mtg-cardBorder rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-mtg-accent">
+              <option value="beginning">Beginning / Upkeep</option>
+              <option value="main1">Main Phase 1</option>
+              <option value="combat">Combat Phase</option>
+              <option value="main2">Main Phase 2</option>
+              <option value="end">End Step</option>
+              <option value="any">Any Phase</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs text-gray-400 font-medium mb-1">Active Player Turn</label>
+            <select id="input-trigger-turn" class="w-full bg-gray-900 border border-mtg-cardBorder rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-mtg-accent">
+              <option value="me">My Turn Only</option>
+              <option value="opponent">Opponent Turn Only</option>
+              <option value="each">Each Player's Turn</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-400 font-medium mb-1">Notes / Instructions</label>
+          <textarea id="input-trigger-notes" rows="2" placeholder="e.g. Draw a card unless opponent pays (1)" class="w-full bg-gray-900 border border-mtg-cardBorder rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-mtg-accent"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
+            <input type="checkbox" id="input-trigger-vibrate" checked class="rounded bg-gray-900 border-mtg-cardBorder text-mtg-accent focus:ring-0">
+            Haptic / Audio Reminder
+          </label>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-mtg-cardBorder">
+          <button type="button" onclick="closeModal('addTriggerModal')" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-mtg-accent text-black font-bold rounded-lg text-xs hover:brightness-110">Save Trigger</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: GITHUB & DEPLOYMENT INSTRUCTIONS -->
+  <div id="githubModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-mtg-card border border-mtg-cardBorder w-full max-w-lg rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-mtg-cardBorder pb-3">
+        <div class="flex items-center gap-2">
+          <i class="fa-brands fa-github text-xl text-mtg-accent"></i>
+          <h3 class="font-bold text-white text-base font-cinzel">GitHub & Android Deployment Guide</h3>
+        </div>
+        <button onclick="closeModal('githubModal')" class="text-gray-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="text-xs text-gray-300 space-y-3 leading-relaxed">
+        <p>This app is 100% client-side HTML/CSS/JS with local storage support. You can store your deck configs directly in GitHub or run as an Android APK.</p>
+
+        <div class="bg-gray-900 p-3 rounded-lg border border-mtg-cardBorder space-y-2">
+          <h4 class="font-bold text-mtg-accent">Option 1: Deploy with GitHub Pages (Web / PWA)</h4>
+          <ol class="list-decimal pl-4 space-y-1 text-gray-400">
+            <li>Create a repository on GitHub (e.g. <code class="text-xs text-mtg-accent">mtg-trigger-tracker</code>).</li>
+            <li>Upload this <code class="text-xs text-white">index.html</code> file.</li>
+            <li>Go to <b>Settings &gt; Pages</b>, select <code class="text-xs text-white">main</code> branch and click <b>Save</b>.</li>
+            <li>Open the hosted link on Android Chrome, tap <b>"Add to Home Screen"</b> to install as an offline App!</li>
+          </ol>
+        </div>
+
+        <div class="bg-gray-900 p-3 rounded-lg border border-mtg-cardBorder space-y-2">
+          <h4 class="font-bold text-mtg-accent">Option 2: Convert to Android APK (Capacitor)</h4>
+          <p class="text-gray-400">To build an Android APK from your GitHub project:</p>
+          <pre class="bg-black/60 p-2 rounded text-[11px] font-mono text-green-400 overflow-x-auto">npm init -y
+npm install @capacitor/core @capacitor/cli @capacitor/android
+npx cap init "MTG Triggers" com.mtg.triggers
+npx cap add android
+npx cap open android</pre>
+        </div>
+
+        <div class="bg-gray-900 p-3 rounded-lg border border-mtg-cardBorder space-y-2">
+          <h4 class="font-bold text-mtg-accent">Storing Triggers in GitHub</h4>
+          <p class="text-gray-400">Export your Deck Triggers as <code class="text-xs text-white">JSON</code> via the Deck tab and store the <code class="text-xs text-white">.json</code> file in your repo to share with playgroups or reload anytime.</p>
+        </div>
+      </div>
+
+      <div class="pt-2 text-right">
+        <button onclick="closeModal('githubModal')" class="px-4 py-2 bg-mtg-accent text-black font-bold rounded-lg text-xs">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUDIO SYNTHESIS FOR HAPTIC / REMINDER SOUND -->
+  <script>
+    // Web Audio API Beep Generator for reminders
+    function playBeep() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5 note
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.2);
+        
+        if (navigator.vibrate) {
+          navigator.vibrate(80);
+        }
+      } catch (e) {
+        console.log('Audio/Haptics not allowed yet.');
+      }
+    }
+
+    // ================= APP STATE =================
+    const PHASES = ['beginning', 'main1', 'combat', 'main2', 'end'];
+    const PHASE_NAMES = {
+      beginning: 'Beginning Phase',
+      main1: 'Main Phase 1',
+      combat: 'Combat Phase',
+      main2: 'Main Phase 2',
+      end: 'End Phase'
+    };
+
+    let gameState = {
+      turn: 1,
+      isMyTurn: true,
+      currentPhaseIndex: 0,
+      life: 40,
+      counters: {
+        poison: 0,
+        'cmdr-casts': 0,
+        energy: 0,
+        storm: 0,
+      },
+      cmdrDamage: [0, 0, 0],
+      checkedTriggersThisPhase: {} // Key: `${turn}-${phase}-${triggerId}`
+    };
+
+    // Default sample MTG triggers
+    let triggers = [
+      {
+        id: '1',
+        name: 'Rhystic Study',
+        phase: 'any',
+        turn: 'opponent',
+        notes: 'Whenever an opponent casts a spell, ask if they pay (1).',
+        vibrate: true
+      },
+      {
+        id: '2',
+        name: 'Black Market Connections',
+        phase: 'beginning',
+        turn: 'me',
+        notes: 'Beginning of Upkeep: Choose one or more options.',
+        vibrate: true
+      },
+      {
+        id: '3',
+        name: 'Smothering Tithe',
+        phase: 'any',
+        turn: 'opponent',
+        notes: 'Whenever opponent draws a card, ask if they pay (2).',
+        vibrate: false
+      },
+      {
+        id: '4',
+        name: 'Phyrexian Arena',
+        phase: 'beginning',
+        turn: 'me',
+        notes: 'At beginning of upkeep, lose 1 life and draw a card.',
+        vibrate: true
+      }
+    ];
+
+    // Initialize App
+    window.onload = function() {
+      loadStorage();
+      renderAll();
+    };
+
+    // Local Storage Sync
+    function saveStorage() {
+      localStorage.setItem('mtg_tracker_state', JSON.stringify(gameState));
+      localStorage.setItem('mtg_tracker_triggers', JSON.stringify(triggers));
+    }
+
+    function loadStorage() {
+      const savedState = localStorage.getItem('mtg_tracker_state');
+      const savedTriggers = localStorage.getItem('mtg_tracker_triggers');
+      if (savedState) gameState = { ...gameState, ...JSON.parse(savedState) };
+      if (savedTriggers) triggers = JSON.parse(savedTriggers);
+    }
+
+    // ================= NAVIGATION =================
+    function switchTab(tabName) {
+      ['tracker', 'triggers', 'counters'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.add('hidden');
+        document.getElementById(`nav-${t}`).className = 'px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-all';
+      });
+
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      document.getElementById(`nav-${tabName}`).className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-mtg-accent text-black transition-all';
+    }
+
+    // ================= GAME LOGIC =================
+    function setPhase(phaseKey) {
+      const idx = PHASES.indexOf(phaseKey);
+      if (idx !== -1) {
+        gameState.currentPhaseIndex = idx;
+        renderPhaseUI();
+        renderActiveTriggers();
+        saveStorage();
+      }
+    }
+
+    function nextPhase() {
+      if (gameState.currentPhaseIndex < PHASES.length - 1) {
+        gameState.currentPhaseIndex++;
+      } else {
+        // Pass turn logic on reaching end of end phase
+        gameState.currentPhaseIndex = 0;
+        togglePlayerTurn();
+        return;
+      }
+      renderPhaseUI();
+      renderActiveTriggers();
+      playBeep();
+      saveStorage();
+    }
+
+    function prevPhase() {
+      if (gameState.currentPhaseIndex > 0) {
+        gameState.currentPhaseIndex--;
+        renderPhaseUI();
+        renderActiveTriggers();
+        saveStorage();
+      }
+    }
+
+    function togglePlayerTurn() {
+      if (!gameState.isMyTurn) {
+        gameState.turn++; // Increment full turn cycle when returning to player
+      }
+      gameState.isMyTurn = !gameState.isMyTurn;
+      gameState.currentPhaseIndex = 0;
+      gameState.counters.storm = 0; // Reset storm count each turn
+      renderPhaseUI();
+      renderActiveTriggers();
+      renderCounters();
+      saveStorage();
+    }
+
+    function resetGame() {
+      if (confirm('Reset turn tracker to Turn 1?')) {
+        gameState.turn = 1;
+        gameState.isMyTurn = true;
+        gameState.currentPhaseIndex = 0;
+        gameState.checkedTriggersThisPhase = {};
+        renderPhaseUI();
+        renderActiveTriggers();
+        saveStorage();
+      }
+    }
+
+    // ================= RENDER FUNCTIONS =================
+    function renderAll() {
+      renderPhaseUI();
+      renderActiveTriggers();
+      renderAllTriggersList();
+      renderCounters();
+    }
+
+    function renderPhaseUI() {
+      document.getElementById('turn-count').textContent = `Turn ${gameState.turn}`;
+      
+      const badge = document.getElementById('player-turn-badge');
+      if (gameState.isMyTurn) {
+        badge.textContent = 'MY TURN';
+        badge.className = 'px-2.5 py-0.5 text-xs font-bold rounded-full bg-mtg-accent/20 text-mtg-accent border border-mtg-accent/40';
+      } else {
+        badge.textContent = "OPPONENT'S TURN";
+        badge.className = 'px-2.5 py-0.5 text-xs font-bold rounded-full bg-red-950/40 text-red-400 border border-red-800/40';
+      }
+
+      const activePhase = PHASES[gameState.currentPhaseIndex];
+      document.getElementById('phase-title').textContent = PHASE_NAMES[activePhase];
+
+      // Update Phase buttons
+      PHASES.forEach(p => {
+        const btn = document.getElementById(`phase-btn-${p}`);
+        if (p === activePhase) {
+          btn.className = 'phase-btn py-2.5 px-1 rounded-lg border text-center transition flex flex-col items-center justify-center gap-1 bg-mtg-accent text-black font-bold border-mtg-accent glow-active';
+        } else {
+          btn.className = 'phase-btn py-2.5 px-1 rounded-lg border text-center transition flex flex-col items-center justify-center gap-1 bg-gray-800/60 text-gray-400 border-mtg-cardBorder hover:border-gray-600';
+        }
+      });
+
+      // Show/hide subphase indicator (Beginning phase untap/upkeep/draw)
+      const subContainer = document.getElementById('subphase-container');
+      if (activePhase === 'beginning') {
+        subContainer.style.display = 'flex';
+      } else {
+        subContainer.style.display = 'none';
+      }
+    }
+
+    function renderActiveTriggers() {
+      const activePhase = PHASES[gameState.currentPhaseIndex];
+      const currentTurnType = gameState.isMyTurn ? 'me' : 'opponent';
+
+      // Filter relevant triggers
+      const filtered = triggers.filter(t => {
+        const phaseMatch = (t.phase === 'any' || t.phase === activePhase);
+        const turnMatch = (t.turn === 'each' || t.turn === currentTurnType);
+        return phaseMatch && turnMatch;
+      });
+
+      const container = document.getElementById('active-triggers-list');
+      const badge = document.getElementById('trigger-count-badge');
+      badge.textContent = `${filtered.length} Active`;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-6 border border-dashed border-mtg-cardBorder rounded-xl text-gray-500 text-xs">
+            <i class="fa-regular fa-bell-slash text-base mb-1 block"></i>
+            No active triggers configured for this phase.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => {
+        const key = `${gameState.turn}-${activePhase}-${t.id}`;
+        const isChecked = !!gameState.checkedTriggersThisPhase[key];
+
+        return `
+          <div onclick="toggleTriggerCheck('${key}')" class="p-3 rounded-xl border transition cursor-pointer flex items-start gap-3 ${isChecked ? 'bg-gray-900/40 border-mtg-cardBorder opacity-50' : 'bg-gray-800/80 border-mtg-accent/40 hover:border-mtg-accent'}">
+            <div class="mt-0.5">
+              <input type="checkbox" ${isChecked ? 'checked' : ''} class="rounded bg-gray-900 border-mtg-cardBorder text-mtg-accent focus:ring-0 pointer-events-none">
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-sm text-white ${isChecked ? 'line-through text-gray-400' : ''}">${t.name}</span>
+                <span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded ${t.turn === 'me' ? 'bg-blue-950 text-blue-300' : 'bg-red-950 text-red-300'}">
+                  ${t.turn === 'me' ? 'My Turn' : t.turn === 'opponent' ? 'Opp Turn' : 'Each Turn'}
+                </span>
+              </div>
+              ${t.notes ? `<p class="text-xs text-gray-400 mt-1">${t.notes}</p>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleTriggerCheck(key) {
+      gameState.checkedTriggersThisPhase[key] = !gameState.checkedTriggersThisPhase[key];
+      renderActiveTriggers();
+      saveStorage();
+    }
+
+    function renderAllTriggersList() {
+      const container = document.getElementById('all-triggers-list');
+      
+      if (triggers.length === 0) {
+        container.innerHTML = `<p class="text-center text-xs text-gray-500 py-6">No custom triggers added yet.</p>`;
+        return;
+      }
+
+      container.innerHTML = triggers.map(t => `
+        <div class="bg-mtg-card border border-mtg-cardBorder p-3.5 rounded-xl flex items-center justify-between">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-sm text-white">${t.name}</span>
+              <span class="text-[10px] bg-gray-800 text-mtg-accent px-2 py-0.5 rounded border border-mtg-cardBorder uppercase font-semibold">
+                ${t.phase}
+              </span>
+            </div>
+            ${t.notes ? `<p class="text-xs text-gray-400">${t.notes}</p>` : ''}
+          </div>
+
+          <button onclick="deleteTrigger('${t.id}')" class="text-gray-500 hover:text-red-400 p-2">
+            <i class="fa-solid fa-trash-can text-sm"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // ================= TRIGGER CRUD =================
+    function saveTrigger(e) {
+      e.preventDefault();
+      const name = document.getElementById('input-trigger-name').value.trim();
+      const phase = document.getElementById('input-trigger-phase').value;
+      const turn = document.getElementById('input-trigger-turn').value;
+      const notes = document.getElementById('input-trigger-notes').value.trim();
+      const vibrate = document.getElementById('input-trigger-vibrate').checked;
+
+      if (!name) return;
+
+      const newTrigger = {
+        id: Date.now().toString(),
+        name,
+        phase,
+        turn,
+        notes,
+        vibrate
+      };
+
+      triggers.push(newTrigger);
+      saveStorage();
+      renderAll();
+      closeModal('addTriggerModal');
+      document.getElementById('trigger-form').reset();
+    }
+
+    function deleteTrigger(id) {
+      triggers = triggers.filter(t => t.id !== id);
+      saveStorage();
+      renderAll();
+    }
+
+    // ================= COUNTERS & LIFE =================
+    function adjustLife(amount) {
+      gameState.life += amount;
+      renderCounters();
+      saveStorage();
+    }
+
+    function adjustCounter(type, amount) {
+      if (gameState.counters[type] !== undefined) {
+        gameState.counters[type] = Math.max(0, gameState.counters[type] + amount);
+        renderCounters();
+        saveStorage();
+      }
+    }
+
+    function adjustCmdrDmg(index, amount) {
+      const idx = index - 1;
+      gameState.cmdrDamage[idx] = Math.max(0, gameState.cmdrDamage[idx] + amount);
+      renderCounters();
+      saveStorage();
+    }
+
+    function renderCounters() {
+      document.getElementById('life-total').textContent = gameState.life;
+      document.getElementById('counter-poison').textContent = gameState.counters.poison;
+      document.getElementById('counter-cmdr-casts').textContent = gameState.counters['cmdr-casts'];
+      document.getElementById('counter-energy').textContent = gameState.counters.energy;
+      document.getElementById('counter-storm').textContent = gameState.counters.storm;
+
+      document.getElementById('cmdr-dmg-1').textContent = gameState.cmdrDamage[0];
+      document.getElementById('cmdr-dmg-2').textContent = gameState.cmdrDamage[1];
+      document.getElementById('cmdr-dmg-3').textContent = gameState.cmdrDamage[2];
+    }
+
+    function resetCounters() {
+      if (confirm('Reset life & counters to 40?')) {
+        gameState.life = 40;
+        gameState.counters = { poison: 0, 'cmdr-casts': 0, energy: 0, storm: 0 };
+        gameState.cmdrDamage = [0, 0, 0];
+        renderCounters();
+        saveStorage();
+      }
+    }
+
+    // ================= JSON IMPORT / EXPORT =================
+    function exportTriggersJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(triggers, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "mtg_deck_triggers.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function importTriggersJSON(event) {
+      const fileReader = new FileReader();
+      fileReader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (Array.isArray(imported)) {
+            triggers = imported;
+            saveStorage();
+            renderAll();
+            alert('Deck triggers imported successfully!');
+          }
+        } catch (err) {
+          alert('Invalid JSON file format.');
+        }
+      };
+      if (event.target.files[0]) {
+        fileReader.readAsText(event.target.files[0]);
+      }
+    }
+
+    // ================= MODAL HELPERS =================
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
